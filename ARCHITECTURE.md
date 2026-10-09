@@ -8,24 +8,24 @@
 
 ## 1. Selected Stack & Dependency Decisions
 
-To prevent dependency drift, build breakage on Windows/Node 24, and unnecessary weight, we select the minimal reliable package set:
+To prevent dependency drift, build breakage on Windows/Node 24, and unnecessary weight, we select the verified minimal stable package set:
 
-| Component | Selected Library | Exact Package Specifier | Rationale & Corrections to Preliminary Report |
+| Component | Selected Library | Exact Package Specifier | Rationale & Verified Compatibility |
 |---|---|---|---|
-| **Framework** | Next.js 14+ | `next@^14.2.15`, `react@^18.3.1`, `react-dom@^18.3.1` | Stable App Router, optimized static rendering, seamless Vercel hosting. |
-| **Language** | TypeScript | `typescript@^5.6.3` | Strict type safety for geospatial coordinates and conflict intervals. |
-| **Styling** | Tailwind CSS | `tailwindcss@^3.4.14`, `postcss`, `autoprefixer` | Standard utility-first engine with zero runtime overhead. |
-| **UI Components** | Radix UI + shadcn primitives | Direct CLI installation via `npx shadcn@latest` | **Correction:** `@shadcn/ui` was an outdated npm package name; standard shadcn is installed via `npx shadcn` or `@radix-ui/react-*` + `clsx` + `tailwind-merge`. |
-| **Icons** | Lucide React | `lucide-react@^0.453.0` | **Correction:** Report mistakenly referenced `lucide-icons-react` (outdated fork). Official package is `lucide-react`. |
-| **GIS Mapping** | Leaflet | `leaflet@^1.9.4`, `@types/leaflet@^1.9.14` | Reliable, cross-browser, no API keys or billing required. Dynamically imported with SSR disabled (`next/dynamic`) to avoid `window is not defined` errors. |
-| **Unit Testing** | Vitest | `vitest@^2.1.3` | Lightweight, native ESM/TS support, faster than Jest. |
-| **E2E Testing** | Playwright | `@playwright/test` | Headless Chrome/Edge testing on Windows and CI. |
+| **Framework** | Next.js 15 (Stable) | `next@^15.2.1`, `react@^19.0.0`, `react-dom@^19.0.0` | Official stable LTS branch with active security patches. Verified compatible with React 19 and Node 24. Replaces outdated `14.2.15`. |
+| **Language** | TypeScript | `typescript@^5.7.0` | Strict type safety for geospatial coordinates, chainage percentages, and date intervals. |
+| **Styling** | Tailwind CSS | `tailwindcss@^3.4.17`, `postcss`, `autoprefixer` | Proven utility engine with full shadcn/Radix component support. |
+| **UI Components** | Radix UI + shadcn primitives | Direct CLI installation via `npx shadcn@latest` | Standard accessible UI primitives (`@radix-ui/react-dialog`, `@radix-ui/react-slot`, `clsx`, `tailwind-merge`). Verified compatible with React 19. |
+| **Icons** | Lucide React | `lucide-react@^1.54.0` | Official icon package. Corrected from deprecated `lucide-icons-react`. |
+| **GIS Mapping** | Leaflet | `leaflet@^1.9.4`, `@types/leaflet@^1.9.22` | Lightweight, zero-billing, cross-platform GIS. Dynamically imported with SSR disabled (`next/dynamic`) to prevent `window is not defined` errors. |
+| **Unit Testing** | Vitest | `vitest@^2.1.8` | Native ESM and TypeScript test runner; runs unit tests for conflict engine in <200ms. |
+| **E2E Testing** | Playwright | `@playwright/test@^1.50.0` | Headless verification of map rendering and sidebar interactions on Windows and CI. |
 
 ---
 
 ## 2. Geospatial & Domain Data Model
 
-The data layer models civic infrastructure entities with precise spatial and temporal coordinates.
+The data layer models civic infrastructure entities with spatial subsegments and inclusive temporal intervals.
 
 ```typescript
 // types/civic.ts
@@ -54,7 +54,7 @@ export interface RoadSegment {
   zone: string;           // "Zone IX (Teynampet)"
   lengthMeters: number;   // 1450
   coordinates: LatLng[];  // Polyline coordinates for map rendering
-  moratoriumUntil?: string; // ISO date string (if recently resurfaced)
+  moratoriumUntil?: string; // ISO date string "YYYY-MM-DD" (if recently resurfaced)
 }
 
 export interface PublicWorkProject {
@@ -65,14 +65,13 @@ export interface PublicWorkProject {
   title: string;
   description: string;
   contractor: string;
-  budgetInLakhs: number;
-  startDate: string;      // "YYYY-MM-DD"
-  endDate: string;        // "YYYY-MM-DD"
+  startDate: string;      // "YYYY-MM-DD" (inclusive)
+  endDate: string;        // "YYYY-MM-DD" (inclusive)
   status: ProjectStatus;
-  segmentStartPct: number; // 0.0 to 1.0 (sub-segment position)
-  segmentEndPct: number;   // 0.0 to 1.0
-  coordinates: LatLng[];   // Specific excavation polyline/bounding coords
-  updatedAt: string;
+  segmentStartPct: number; // 0.0 to 1.0 (sub-segment position along road)
+  segmentEndPct: number;   // 0.0 to 1.0 (sub-segment position along road)
+  coordinates: LatLng[];   // Specific excavation polyline coordinates
+  isSimulated: true;       // Explicit flag confirming synthetic demonstration data
 }
 
 export type ConflictSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM';
@@ -83,14 +82,21 @@ export interface RepeatDigConflict {
   roadName: string;
   zone: string;
   severity: ConflictSeverity;
-  conflictType: 'DIRECT_SCHEDULE_COLLISION' | 'MORATORIUM_BREACH';
+  conflictType: 'DIRECT_SCHEDULE_COLLISION' | 'RECENT_RESURFACING_RISK';
   projectA: PublicWorkProject;
   projectB: PublicWorkProject;
-  overlapStartDate: string;
-  overlapEndDate: string;
-  overlapDays: number;
-  estimatedWasteInLakhs: number;
-  recommendedAction: string;
+  subsegmentOverlap: {
+    startPct: number;     // e.g. 0.35
+    endPct: number;       // e.g. 0.80
+    overlapMeters: number;// Approximate meters of physical overlap
+  };
+  temporalOverlap: {
+    startDate: string;    // Inclusive overlap start "YYYY-MM-DD"
+    endDate: string;      // Inclusive overlap end "YYYY-MM-DD"
+    overlapDays: number;  // Inclusive calendar days of conflict
+  };
+  explanation: string;    // Human-readable, evidence-based civic explanation
+  recommendedAction: string; // e.g. "Coordinate joint utility duct laying before surface paving"
 }
 ```
 
@@ -98,17 +104,33 @@ export interface RepeatDigConflict {
 
 ## 3. Deterministic Repeat-Dig Conflict Engine
 
-### 3.1. Algorithmic Principles
-The Repeat-Dig Conflict Engine is a pure mathematical and calendar algorithm with zero non-deterministic or hallucinated outputs:
-1. **Spatial Grouping:** Projects are partitioned by their canonical `roadId`. Only projects targeting the identical physical road segment are evaluated.
-2. **Chainage/Sub-segment Overlap Test:** Check whether interval $[A_{start}, A_{end}] \cap [B_{start}, B_{end}] \neq \emptyset$.
-3. **Temporal Intersection & Moratorium Rules:**
-   - **Direct Collision:** $\max(Start_A, Start_B) \le \min(End_A, End_B)$. Two excavations occurring simultaneously cause unmanageable road blockage.
-   - **Moratorium Violation:** If Agency $A$ executes `ROAD_RESURFACING` finishing at $End_A$, and Agency $B$ schedules excavation starting at $Start_B$ where:
-     $$0 < (Start_B - End_A) \le 180 \text{ days}$$
-     This constitutes an illegal or wasteful repeat excavation of fresh asphalt.
-4. **Economic Waste Estimation:**
-   Estimated waste is calculated based on municipal standard schedule of rates (SSR) for asphalt trench reinstatement ($\approx ₹ 3,200 \text{ per sq. meter}$ multiplied by overlapping trench dimensions).
+### 3.1. Algorithmic Principles & Boundary Conditions
+The Repeat-Dig Conflict Engine is a pure mathematical and calendar algorithm with zero non-deterministic or hallucinated outputs.
+
+1. **Physical Road Identity Match:** Projects $A$ and $B$ must target the identical physical road segment ($A.roadId == B.roadId$).
+2. **Subsegment Spatial Overlap Rule:**
+   - Road projects often occupy non-overlapping sections of the same thoroughfare (e.g., Anna Salai from km 0.0 to 0.4 vs km 0.9 to 1.4).
+   - Projects only have physical spatial overlap if:
+     $$\text{Overlap}_{start} = \max(A.segmentStartPct, B.segmentStartPct)$$
+     $$\text{Overlap}_{end} = \min(A.segmentEndPct, B.segmentEndPct)$$
+     $$\text{HasSpatialOverlap} \iff \text{Overlap}_{end} > \text{Overlap}_{start}$$
+   - If $\text{Overlap}_{end} \le \text{Overlap}_{start}$, spatial overlap is 0%, and **no conflict is generated**.
+3. **Inclusive Date Boundary Conditions:**
+   - All calendar dates ($Start_A, End_A, Start_B, End_B$) are normalized to ISO `YYYY-MM-DD` UTC midnight timestamps.
+   - Date ranges are **inclusive on both boundaries**.
+   - Two schedules directly collide if and only if:
+     $$\max(Start_A, Start_B) \le \min(End_A, End_B)$$
+     - **Exact-boundary edge case:** If $End_A == Start_B$, overlap is exactly 1 day.
+     - If $Start_B > End_A$, overlap days = 0.
+4. **Recent-Resurfacing Coordination Risk (Configurable 180-Day Heuristic):**
+   - Applies when one project has category `ROAD_RESURFACING` (Project $A$) and finishes at $End_A$, and an excavation project (Project $B$) is scheduled on an overlapping subsegment.
+   - Evaluated using a configurable demonstration heuristic (default: 180 inclusive calendar days).
+   - If:
+     $$1 \le (Start_B - End_A) \le 180 \text{ calendar days}$$
+     and $\text{HasSpatialOverlap} == \text{true}$, the engine flags a `RECENT_RESURFACING_RISK`.
+   - **Neutral civic terminology:** This is presented as an operational coordination risk and potential duplicate restoration alert, not a statutory violation or proven crime.
+5. **Speculative Financial Calculations Omitted:**
+   - In accordance with MVP quality guidelines, unverified reinstatement rate multipliers (e.g. ₹/m² guesses) and speculative rupee savings formulas are omitted. Focus remains on explainable scheduling alignment, physical chainage coordinates, and joint trenching advisories.
 
 ```
    +-------------------------------------------------------+
@@ -122,17 +144,23 @@ The Repeat-Dig Conflict Engine is a pure mathematical and calendar algorithm wit
                               |
                               v
    +-------------------------------------------------------+
-   |   Evaluate Project Pairs (A, B) within same roadId    |
+   | Subsegment Check: min(EndPct) > max(StartPct)?        |
    +-------------------------------------------------------+
-            /                                   \
-           v                                     v
-  [Schedule Overlap?]                   [Post-Paving Moratorium?]
-  Overlap >= 1 day                      Within 180 days of paving
-           \                                     /
-            v                                   v
+           |                                       |
+        [Yes]                                     [No]
+           |                                       |
+           v                                       v
+   +-------------------------------+      [Zero Conflict]
+   | Check Inclusive Temporal Rule |
+   +-------------------------------+
+            /                              \
+           v                                v
+  [Direct Overlap?]               [Recent Resurfacing Risk?]
+  max(Start) <= min(End)          1 <= (StartB - EndA) <= 180 days
+           \                              /
+            v                            v
    +-------------------------------------------------------+
-   |   Compute Conflict: Severity, Overlap Days, Waste     |
-   |              Generate Actionable Plan                 |
+   |   Output Explainable Conflict: Chainage, Dates, Action|
    +-------------------------------------------------------+
 ```
 
@@ -141,9 +169,9 @@ The Repeat-Dig Conflict Engine is a pure mathematical and calendar algorithm wit
 ## 4. Map Integration Strategy (Next.js + Leaflet)
 
 ### 4.1. SSR Safety & Dynamic Loading
-Leaflet accesses the browser `window` and `navigator` objects during instantiation. In Next.js App Router, the map wrapper component is strictly loaded via `next/dynamic`:
+Leaflet requires browser globals (`window`, `navigator`, `document`) which do not exist during Next.js server-side compilation. In Next.js App Router, the map wrapper is strictly loaded via `next/dynamic` with SSR disabled:
 ```tsx
-const DynamicMap = dynamic(() => import('@/components/map/DigOnceMap'), {
+const DigOnceMap = dynamic(() => import('@/components/map/DigOnceMap'), {
   ssr: false,
   loading: () => <MapLoadingSkeleton />
 });
@@ -151,9 +179,10 @@ const DynamicMap = dynamic(() => import('@/components/map/DigOnceMap'), {
 
 ### 4.2. Free Tile Attribution & High-Performance Layer
 - **Basemap:** CartoDB Positron / OpenStreetMap standard tiles served via HTTPS.
-- **Attribution Control:** Complies fully with OpenStreetMap Foundation guidelines:
+- **Attribution Notice:** Prominently and continuously displayed in the map corner:
   `© OpenStreetMap contributors, © CARTO`.
-- **Vector Rendering:** Road segments are rendered using SVG Leaflet `Polyline` paths with glowing conflict states (e.g., `#EF4444` red with animated dash-array or warning markers for critical repeat-dig segments).
+- **Demo Data Separation:** Map tiles represent actual geographic road paths in Chennai–Kancheepuram. Project layers and work order coordinates are explicitly identified in the UI and code as simulated demonstration data.
+- **Vector Styling:** Non-conflicting projects render as clean agency-colored polylines (`4px` stroke). Subsegments identified with repeat-dig conflicts render with animated dashed red polylines (`#DC2626`, `6px` stroke) with warning markers.
 
 ---
 
@@ -161,42 +190,58 @@ const DynamicMap = dynamic(() => import('@/components/map/DigOnceMap'), {
 
 ```
 app/
-├── layout.tsx                # Base HTML, font variables, theme provider
+├── layout.tsx                # Base HTML, Inter font, metadata
 ├── page.tsx                  # Main Coordination Hub (Split Layout)
 components/
 ├── header/
-│   ├── TopNavbar.tsx         # GCC/TN branding, Role toggle, Stats summary
-│   └── SummaryMetrics.tsx    # Live tally: Active digs, Flagged conflicts, Savings
+│   ├── TopNavbar.tsx         # DigOnce branding, Demo banner, Role toggle
+│   └── SummaryMetrics.tsx    # Live tally: Active digs, Flagged conflicts
 ├── map/
 │   ├── DigOnceMap.tsx        # Dynamic Leaflet canvas, GeoJSON/Polylines
 │   ├── MapLegend.tsx         # Agency colors & conflict status indicator
 │   └── MapControls.tsx       # Reset bounds, zone quick-jumps
 ├── explorer/
 │   ├── ProjectSidebar.tsx    # Search input, filter dropdowns, project list
-│   ├── ProjectCard.tsx       # Individual card with agency badge & conflict tag
+│   ├── ProjectCard.tsx       # Card with agency badge, subsegment badge & conflict tag
 │   └── ConflictAlertBadge.tsx# Direct link to conflict modal/panel
 ├── details/
 │   ├── ProjectDetailDrawer.tsx # Slide-out drawer with timeline & specs
 │   └── ConflictModal.tsx       # Joint trenching advisory & evidence
+├── citizen/
+│   └── CitizenReportModal.tsx  # Browser-only issue logger with validation
 lib/
-├── conflictEngine.ts         # Pure conflict detection logic
-├── mockData.ts               # Chennai-Kancheepuram seed data
-└── utils.ts                  # Date formatters, currency formatters
+├── conflictEngine.ts         # Pure deterministic conflict detection logic
+├── mockData.ts               # Chennai-Kancheepuram seed data (labeled simulated)
+└── utils.ts                  # Date interval and chainage math helpers
 ```
 
 ---
 
-## 6. Testing, Quality & Deployment
+## 6. Antigravity Environment & Tooling Verification
 
-### 6.1. Unit Testing Strategy
-- Pure unit tests executed via Vitest on `conflictEngine.ts`:
-  - `test_direct_overlap_same_road`: Asserts critical conflict generated.
-  - `test_moratorium_violation`: Asserts post-paving dig within 180 days flagged.
-  - `test_different_roads_no_conflict`: Asserts separate road IDs never generate conflicts.
-  - `test_adjacent_dates_no_conflict`: Asserts sequential non-overlapping digs do not trigger false alarms.
+- **Subagents & MCP Capabilities:** Antigravity environment natively supports agentic coding workflows via tool invocations (`run_command`, `write_to_file`, `replace_file_content`, `view_file`, `search_web`, `manage_task`).
+- **Investigation of Ponytail:** 
+  - Verified from official package registries and documentation: "Ponytail" is an open-source prompt ruleset / Claude Code plugin created by DietrichGebert to enforce YAGNI and minimalist code.
+  - It is **not** a built-in Antigravity skill or official npm runtime library.
+  - **Decision:** In accordance with instructions, we do not attempt to install unsupported third-party plugins. We apply its sound engineering principles directly (YAGNI, minimal dependencies, standard web APIs, zero bloated code).
 
-### 6.2. Production Build & Deployment Pipeline
-1. `npm run lint` & `npm test` executed locally.
-2. Verified with `npm run build` locally to ensure no bundle or static generation errors.
-3. Git commits pushed to GitHub repository.
-4. Auto-deployed on **Vercel** with global CDN caching for static map assets and instant public URL generation.
+---
+
+## 7. Testing, Quality & Milestone Gates
+
+### 7.1. Unit Testing Strategy
+Pure unit tests executed via Vitest on `conflictEngine.ts`:
+- `test_direct_overlap_same_road_same_subsegment`: Asserts critical collision flagged.
+- `test_same_road_different_subsegments_no_conflict`: Asserts subsegments `[0.0, 0.3]` and `[0.7, 1.0]` on the same road do **not** trigger a conflict.
+- `test_exact_date_boundary_overlap`: Asserts $End_A == Start_B$ evaluates to exactly 1 overlapping day.
+- `test_adjacent_non_overlapping_dates`: Asserts $Start_B == End_A + 1$ does not trigger direct collision.
+- `test_recent_resurfacing_heuristic_180_days`: Asserts utility dig within 180 days of road resurfacing is flagged as `RECENT_RESURFACING_RISK`.
+- `test_recent_resurfacing_past_180_days`: Asserts utility dig at 181 days is not flagged.
+- `test_different_roads_no_conflict`: Asserts separate road IDs never conflict.
+
+### 7.2. Release Gates
+Each milestone requires clean verification before proceeding:
+1. `npm test` -> 100% passing tests on conflict logic.
+2. `npm run lint` -> Zero ESLint errors or unused imports.
+3. `npm run build` -> Clean Next.js static build without warnings.
+4. Deployment to **Vercel** with live public URL.
