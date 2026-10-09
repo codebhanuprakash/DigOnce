@@ -66,10 +66,10 @@ export default function DigOnceMap({
     });
 
     const tileLayer = L.tileLayer(
-      'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       {
-        subdomains: 'abcd',
         maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       }
     );
 
@@ -317,8 +317,8 @@ export default function DigOnceMap({
       </div>
 
       {/* Mandatory Free Map Attribution Notice */}
-      <div className="absolute bottom-1 right-2 z-20 rounded bg-white/80 px-2 py-0.5 text-[10px] text-slate-500 backdrop-blur-xs">
-        © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-800">OpenStreetMap</a> contributors, © <a href="https://carto.com/attributions" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-800">CARTO</a>
+      <div className="absolute bottom-1 right-2 z-20 rounded bg-white/85 px-2 py-0.5 text-[10px] text-slate-500 backdrop-blur-xs">
+        Map data &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-800">OpenStreetMap</a> contributors
       </div>
     </div>
   );

@@ -17,7 +17,6 @@ test.describe('DigOnce End-to-End Workflow & Release Verification', () => {
     await expect(page.locator('text=Demonstration Environment')).toBeVisible();
     await expect(page.locator('text=2 Repeat-Dig Conflicts')).toBeVisible();
     await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'CARTO' })).toBeVisible();
 
     // 2. Search for a project
     const searchInput = page.locator('input[placeholder*="Search by title"]');

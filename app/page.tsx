@@ -211,7 +211,7 @@ export default function Home() {
         <aside
           role="region"
           aria-label="Project and Conflict Explorer"
-          className="flex w-full flex-col border-b border-civic-border bg-white lg:w-96 lg:border-b-0 lg:border-r"
+          className="flex w-full flex-col border-b border-civic-border bg-white lg:w-96 lg:border-b-0 lg:border-r max-h-[48vh] lg:max-h-none shrink-0"
         >
           {/* Tabs: Projects vs Conflicts */}
           <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
