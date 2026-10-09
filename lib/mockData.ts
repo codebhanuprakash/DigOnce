@@ -1,84 +1,58 @@
 import { PublicWorkProject, RoadSegment } from './types';
+import { ROADS_GEOJSON } from './roadsGeoJson';
+import { interpolateSubPolyline } from './geoUtils';
 
 /**
- * Canonical Chennai–Kancheepuram Road Segments
- * Geometry coordinates represent real landmark thoroughfares in Chennai & Kancheepuram.
+ * Real Chennai–Kancheepuram Road Segments extracted from OpenStreetMap.
+ * See public/data/roads.geojson for authoritative GeoJSON features, OSM way IDs, and ODbL attribution.
  */
-export const MOCK_ROAD_SEGMENTS: RoadSegment[] = [
-  {
-    id: 'RD-CH-09-ANNA-01',
-    name: 'Anna Salai (Teynampet to Nandanam)',
-    wardNumber: 118,
-    zone: 'Zone IX (Teynampet)',
-    lengthMeters: 1800,
-    coordinates: [
-      { lat: 13.0418, lng: 80.2486 },
-      { lat: 13.0335, lng: 80.2412 },
-      { lat: 13.0232, lng: 80.2319 },
-    ],
-  },
-  {
-    id: 'RD-CH-10-ARCOT-02',
-    name: 'Arcot Road (Kodambakkam to Vadapalani)',
-    wardNumber: 130,
-    zone: 'Zone X (Kodambakkam)',
-    lengthMeters: 2200,
-    coordinates: [
-      { lat: 13.0515, lng: 80.2223 },
-      { lat: 13.0510, lng: 80.2105 },
-      { lat: 13.0505, lng: 80.2012 },
-    ],
-  },
-  {
-    id: 'RD-CH-13-LB-03',
-    name: 'Lattice Bridge (LB) Road (Adyar to Thiruvanmiyur)',
-    wardNumber: 175,
-    zone: 'Zone XIII (Adyar)',
-    lengthMeters: 1600,
-    coordinates: [
-      { lat: 13.0067, lng: 80.2570 },
-      { lat: 12.9925, lng: 80.2588 },
-      { lat: 12.9830, lng: 80.2595 },
-    ],
-  },
-  {
-    id: 'RD-KANCHI-01-GANDHI-04',
-    name: 'Gandhi Road (Kancheepuram Town)',
-    wardNumber: 22,
-    zone: 'Kancheepuram Urban',
-    lengthMeters: 1400,
-    coordinates: [
-      { lat: 12.8342, lng: 79.7036 },
-      { lat: 12.8365, lng: 79.7088 },
-      { lat: 12.8390, lng: 79.7142 },
-    ],
-  },
-];
+export const MOCK_ROAD_SEGMENTS: RoadSegment[] = ROADS_GEOJSON.features.map((feature: any) => ({
+  id: feature.properties.id,
+  name: feature.properties.name,
+  wardNumber: feature.properties.wardNumber,
+  zone: feature.properties.zone,
+  lengthMeters: feature.properties.lengthMeters,
+  osmWayIds: feature.properties.osmWayIds,
+  highway: feature.properties.highway,
+  coordinates: feature.geometry.coordinates.map((pt: [number, number]) => ({
+    lat: pt[1],
+    lng: pt[0],
+  })),
+}));
+
+// Helper to look up a road segment by ID
+function getRoadCoords(roadId: string) {
+  const road = MOCK_ROAD_SEGMENTS.find((r) => r.id === roadId);
+  if (!road) throw new Error(`Road not found: ${roadId}`);
+  return road.coordinates;
+}
 
 /**
  * Synthetic demonstration public works projects.
  * Explicitly labeled as simulated scenarios designed to test and demonstrate
  * the conflict detection engine.
+ *
+ * CRITICAL REALISM FIX: Every project's polyline coordinates are deterministically
+ * derived from its parent road's canonical OpenStreetMap geometry using geodesic
+ * cumulative distance slicing (`interpolateSubPolyline`).
  */
 export const MOCK_PROJECTS: PublicWorkProject[] = [
-  // 1 & 2: Valid Concurrent Work Conflict on Anna Salai (subsegments 0.20-0.70 vs 0.40-0.85, dates Nov 2026)
+  // 1 & 2: Valid Concurrent Work Conflict on Anna Salai
+  // Subsegments: 0.20-0.70 vs 0.40-0.85 (Overlapping: 0.40-0.70), Dates: Nov 2026
   {
     id: 'PRJ-2026-GCC-041',
     roadId: 'RD-CH-09-ANNA-01',
     agency: 'GCC',
     category: 'ROAD_RESURFACING',
     title: 'Anna Salai Bitumen Milling & Resurfacing',
-    description: 'Milling and relaying wearing coat from Eldams Rd junction to Cenotaph Rd.',
+    description: 'Milling and relaying wearing coat along Anna Salai arterial corridor.',
     contractor: 'Southern Infrastructure Ltd',
     startDate: '2026-11-01',
     endDate: '2026-11-20',
     status: 'PLANNED',
     segmentStartPct: 0.20,
     segmentEndPct: 0.70,
-    coordinates: [
-      { lat: 13.0390, lng: 80.2460 },
-      { lat: 13.0335, lng: 80.2412 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-09-ANNA-01'), 0.20, 0.70),
     isSimulated: true,
   },
   {
@@ -87,40 +61,34 @@ export const MOCK_PROJECTS: PublicWorkProject[] = [
     agency: 'CMWSSB',
     category: 'WATER_SUPPLY',
     title: 'Water Feeder Main Replacement',
-    description: 'Replacement of aged 300mm cast-iron water distribution conduit.',
+    description: 'Replacement of aged 300mm cast-iron water distribution conduit under road carriageway.',
     contractor: 'Chennai Metro Utilities Ltd',
     startDate: '2026-11-10',
     endDate: '2026-11-28',
     status: 'PLANNED',
     segmentStartPct: 0.40,
     segmentEndPct: 0.85,
-    coordinates: [
-      { lat: 13.0350, lng: 80.2425 },
-      { lat: 13.0270, lng: 80.2350 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-09-ANNA-01'), 0.40, 0.85),
     isSimulated: true,
   },
 
   // 3 & 4: Valid Recent-Resurfacing Coordination Risk on Arcot Road
-  // Project 3 is COMPLETED resurfacing on 2026-08-15.
-  // Project 4 is PLANNED excavation starting 2026-10-20 (66 days later, within 180-day heuristic).
+  // Project 3 is COMPLETED resurfacing on 2026-08-15 (subsegment 0.10-0.60).
+  // Project 4 is PLANNED excavation starting 2026-10-20 (subsegment 0.25-0.50, 66 days later within 180-day heuristic).
   {
     id: 'PRJ-2026-GCC-012',
     roadId: 'RD-CH-10-ARCOT-02',
     agency: 'GCC',
     category: 'ROAD_RESURFACING',
     title: 'Arcot Road High-Density Asphalt Overlay',
-    description: 'Post-monsoon surface rectification and micro-surfacing.',
+    description: 'Post-monsoon surface rectification and micro-surfacing in Kodambakkam.',
     contractor: 'Apex Paving Engineers',
     startDate: '2026-08-01',
     endDate: '2026-08-15',
     status: 'COMPLETED',
     segmentStartPct: 0.10,
     segmentEndPct: 0.60,
-    coordinates: [
-      { lat: 13.0514, lng: 80.2200 },
-      { lat: 13.0510, lng: 80.2105 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-10-ARCOT-02'), 0.10, 0.60),
     isSimulated: true,
   },
   {
@@ -136,72 +104,60 @@ export const MOCK_PROJECTS: PublicWorkProject[] = [
     status: 'PLANNED',
     segmentStartPct: 0.25,
     segmentEndPct: 0.50,
-    coordinates: [
-      { lat: 13.0512, lng: 80.2150 },
-      { lat: 13.0510, lng: 80.2105 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-10-ARCOT-02'), 0.25, 0.50),
     isSimulated: true,
   },
 
-  // 5 & 6: Same Road (LB Road) but NON-OVERLAPPING Subsegments (No Conflict Expected)
+  // 5 & 6: Same Road (Rajiv Gandhi Salai / OMR) but NON-OVERLAPPING Subsegments (No Conflict Expected)
   // Subsegments: 0.00-0.30 vs 0.60-0.95
   {
     id: 'PRJ-2026-GCC-055',
-    roadId: 'RD-CH-13-LB-03',
+    roadId: 'RD-CH-13-OMR-03',
     agency: 'GCC',
     category: 'ROAD_RESURFACING',
-    title: 'LB Road Adyar Junction Resurfacing',
-    description: 'Traffic circle intersection re-paving near Adyar signal.',
+    title: 'OMR Rajiv Gandhi Salai Wearing Coat Rectification',
+    description: 'Pavement rehabilitation from Madhya Kailash junction southward.',
     contractor: 'Capital Roads Works',
     startDate: '2026-11-01',
     endDate: '2026-11-15',
     status: 'PLANNED',
     segmentStartPct: 0.00,
     segmentEndPct: 0.30,
-    coordinates: [
-      { lat: 13.0067, lng: 80.2570 },
-      { lat: 13.0000, lng: 80.2576 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-13-OMR-03'), 0.00, 0.30),
     isSimulated: true,
   },
   {
     id: 'PRJ-2026-TELECOM-099',
-    roadId: 'RD-CH-13-LB-03',
+    roadId: 'RD-CH-13-OMR-03',
     agency: 'TELECOM',
     category: 'TELECOM_FIBER',
-    title: 'Thiruvanmiyur Optical Fiber Ducting',
-    description: 'Micro-trenching for urban high-speed broadband corridor.',
+    title: 'Tidel Park Optical Fiber Ducting',
+    description: 'Micro-trenching for urban high-speed IT corridor broadband connectivity.',
     contractor: 'Metro Optical Telecom',
     startDate: '2026-11-05',
     endDate: '2026-11-12',
     status: 'PLANNED',
     segmentStartPct: 0.60,
     segmentEndPct: 0.95,
-    coordinates: [
-      { lat: 12.9880, lng: 80.2590 },
-      { lat: 12.9835, lng: 80.2595 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-13-OMR-03'), 0.60, 0.95),
     isSimulated: true,
   },
 
   // 7: Distinct Road Segment in Kancheepuram (Different Road ID - No Conflict Expected)
   {
     id: 'PRJ-2026-CMRL-077',
-    roadId: 'RD-KANCHI-01-GANDHI-04',
+    roadId: 'RD-KANCHI-01-RAIL-04',
     agency: 'CMRL',
     category: 'METRO_STATION',
-    title: 'Gandhi Road Feeder Bus Terminal Prep',
-    description: 'Pavement leveling and pedestrian interchange lane construction.',
+    title: 'Railway Road Intermodal Transit Prep',
+    description: 'Pavement leveling and pedestrian interchange lane construction near railway hub.',
     contractor: 'Tamil Nadu Urban Construction',
     startDate: '2026-12-01',
     endDate: '2026-12-31',
     status: 'PLANNED',
     segmentStartPct: 0.10,
     segmentEndPct: 0.40,
-    coordinates: [
-      { lat: 12.8350, lng: 79.7050 },
-      { lat: 12.8375, lng: 79.7100 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-KANCHI-01-RAIL-04'), 0.10, 0.40),
     isSimulated: true,
   },
 
@@ -219,10 +175,7 @@ export const MOCK_PROJECTS: PublicWorkProject[] = [
     status: 'PLANNED',
     segmentStartPct: 0.30,
     segmentEndPct: 0.60,
-    coordinates: [
-      { lat: 13.0360, lng: 80.2440 },
-      { lat: 13.0300, lng: 80.2380 },
-    ],
+    coordinates: interpolateSubPolyline(getRoadCoords('RD-CH-09-ANNA-01'), 0.30, 0.60),
     isSimulated: true,
   },
 ];

@@ -23,12 +23,15 @@ export interface LatLng {
 }
 
 export interface RoadSegment {
-  id: string;             // Canonical identifier, e.g. "RD-CH-09-ANNA-01"
-  name: string;           // "Anna Salai (Teynampet to Nandanam)"
-  wardNumber: number;     // 118
-  zone: string;           // "Zone IX (Teynampet)"
-  lengthMeters: number;   // 1450
-  coordinates: LatLng[];  // Polyline coordinates for map rendering
+  id: string;               // Canonical identifier, e.g. "RD-CH-09-ANNA-01"
+  name: string;             // "Anna Salai (Teynampet to Nandanam)"
+  wardNumber: number;       // 118
+  zone: string;             // "Zone IX (Teynampet)"
+  lengthMeters: number;     // 1847
+  coordinates: LatLng[];    // Real polyline coordinates extracted from OpenStreetMap
+  osmWayIds?: number[];     // Verified OpenStreetMap way IDs
+  highway?: string;         // OSM highway tag, e.g. "primary", "trunk"
+  sourceAttribution?: string;
 }
 
 export interface PublicWorkProject {
