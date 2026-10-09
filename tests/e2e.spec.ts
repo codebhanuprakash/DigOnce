@@ -1,14 +1,23 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('DigOnce End-to-End Workflow Verification', () => {
+test.describe('DigOnce End-to-End Workflow & Release Verification', () => {
   test('Full Discovery, Investigation, Coordination Action, and Persistence Journey', async ({ page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+
     // 1. Open the application
     await page.goto('http://localhost:3000');
     await expect(page).toHaveTitle(/DigOnce/);
 
-    // Verify initial layout elements
+    // Verify initial layout elements and disclaimers
     await expect(page.locator('text=Demonstration Environment')).toBeVisible();
     await expect(page.locator('text=2 Repeat-Dig Conflicts')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'OpenStreetMap' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'CARTO' })).toBeVisible();
 
     // 2. Search for a project
     const searchInput = page.locator('input[placeholder*="Search by title"]');
@@ -33,7 +42,9 @@ test.describe('DigOnce End-to-End Workflow Verification', () => {
     await conflictLink.click();
 
     // 5. Confirm Conflict Alerts tab is active and conflict inspector shows deterministic finding
-    await expect(page.getByTestId('conflict-card-CNF-CONCURRENT-RD-CH-09-ANNA-01-PRJ-2026-CMWSSB-082-PRJ-2026-GCC-041')).toBeVisible();
+    await expect(
+      page.getByTestId('conflict-card-CNF-CONCURRENT-RD-CH-09-ANNA-01-PRJ-2026-CMWSSB-082-PRJ-2026-GCC-041')
+    ).toBeVisible();
     await expect(inspector).toContainText('CONCURRENT_WORK_COLLISION');
     await expect(inspector).toContainText('Coordinate joint trenching');
 
@@ -76,7 +87,16 @@ test.describe('DigOnce End-to-End Workflow Verification', () => {
     await page.getByTestId('close-inspector-btn').click();
     await expect(page.getByTestId('detail-inspector')).toBeHidden();
 
-    // 12. Capture a screenshot for verification evidence
-    await page.screenshot({ path: 'test-results/milestone4-browser-verification.png', fullPage: true });
+    // 12. Test Narrow Screen (Mobile Viewport)
+    await page.setViewportSize({ width: 375, height: 667 });
+    await expect(page.locator('text=DigOnce')).toBeVisible();
+    await expect(page.locator('button:has-text("Conflict Alerts")')).toBeVisible();
+
+    // Reset viewport and capture a high-resolution screenshot
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.screenshot({ path: 'public/digonce-verified-interface.png', fullPage: true });
+
+    // Ensure no unhandled application errors occurred in console
+    expect(consoleErrors).toEqual([]);
   });
 });
