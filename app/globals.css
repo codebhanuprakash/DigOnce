@@ -1,3 +1,5 @@
+@import "leaflet/dist/leaflet.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,4 +15,35 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   margin: 0;
   padding: 0;
+}
+
+/* Leaflet Container Styling */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+  z-index: 10;
+}
+
+/* Custom Marker Styling for Agency Pins */
+.agency-marker-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 700;
+  font-size: 10px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  border: 2px solid white;
+  transition: transform 0.15s ease-in-out;
+}
+
+.agency-marker-pin:hover {
+  transform: scale(1.15);
+}
+
+.agency-marker-pin.in-conflict {
+  border-color: #DC2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.45), 0 2px 6px rgba(0, 0, 0, 0.35);
 }

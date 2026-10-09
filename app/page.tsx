@@ -1,20 +1,77 @@
+'use client';
+
+import React, { useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { MOCK_PROJECTS, MOCK_ROAD_SEGMENTS } from '@/lib/mockData';
+import { detectConflicts } from '@/lib/conflictEngine';
+import { PublicWorkProject, ConflictFinding } from '@/lib/types';
+
+// Dynamically load the Leaflet map with SSR disabled to prevent `window is not defined`
+const DigOnceMap = dynamic(() => import('@/components/map/DigOnceMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full w-full flex-col items-center justify-center bg-slate-100 p-6 text-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-3 border-civic-blue border-t-transparent" />
+      <p className="mt-3 text-xs font-semibold text-slate-700">Loading Geospatial Engine...</p>
+      <p className="text-[11px] text-slate-400">Centering Chennai–Kancheepuram corridor</p>
+    </div>
+  ),
+});
+
 export default function Home() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedConflictId, setSelectedConflictId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'PROJECTS' | 'CONFLICTS'>('PROJECTS');
+
+  // Evaluate conflicts deterministically using the canonical engine
+  const engineResult = useMemo(() => {
+    return detectConflicts(MOCK_PROJECTS);
+  }, []);
+
+  const conflicts = engineResult.conflicts;
+  const projects = MOCK_PROJECTS;
+  const roads = MOCK_ROAD_SEGMENTS;
+
+  // Selected entities for contextual inspector
+  const selectedProject: PublicWorkProject | undefined = useMemo(() => {
+    return projects.find((p) => p.id === selectedProjectId);
+  }, [projects, selectedProjectId]);
+
+  const selectedConflict: ConflictFinding | undefined = useMemo(() => {
+    return conflicts.find((c) => c.id === selectedConflictId);
+  }, [conflicts, selectedConflictId]);
+
+  const handleSelectProject = (id: string) => {
+    setSelectedProjectId(id);
+    setSelectedConflictId(null);
+  };
+
+  const handleSelectConflict = (id: string) => {
+    setSelectedConflictId(id);
+    setSelectedProjectId(null);
+  };
+
   return (
-    <div className="flex min-h-screen flex-col bg-civic-slate text-civic-navy">
+    <div className="flex h-screen flex-col overflow-hidden bg-civic-slate text-civic-navy">
       {/* 1. Global Notice: Simulated Demo Environment */}
       <aside
         role="region"
         aria-label="Demonstration notice"
-        className="border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-medium text-amber-900"
+        className="flex items-center justify-between border-b border-amber-300 bg-amber-50 px-4 py-1.5 text-xs text-amber-900"
       >
-        <span className="font-semibold uppercase tracking-wider text-amber-800 mr-2">Demonstration Environment</span>
-        All project records, contractor allocations, and schedules are synthetic test scenarios. Basemap data © OpenStreetMap contributors, © CARTO.
+        <div className="truncate">
+          <span className="mr-2 font-bold uppercase tracking-wider text-amber-800">Demonstration Environment:</span>
+          <span>Project records and schedules are synthetic test scenarios. Basemap data © OpenStreetMap contributors, © CARTO.</span>
+        </div>
+        <span className="shrink-0 rounded bg-amber-200/80 px-2 py-0.5 text-[10px] font-semibold text-amber-900">
+          Simulated Data
+        </span>
       </aside>
 
       {/* 2. Top Navigation Bar */}
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-civic-border bg-white px-4 shadow-sm sm:px-6">
+      <header className="flex h-13 shrink-0 items-center justify-between border-b border-civic-border bg-white px-4 shadow-2xs sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-civic-blue text-sm font-bold text-white shadow-sm">
+          <div className="flex h-8 w-8 items-center justify-center rounded bg-civic-blue text-sm font-bold text-white shadow-xs">
             DO
           </div>
           <div>
@@ -22,16 +79,17 @@ export default function Home() {
               DigOnce
             </h1>
             <p className="text-[11px] font-normal text-slate-500">
-              Chennai–Kancheepuram Civic Coordination
+              Chennai–Kancheepuram Civic Works Coordination Portal
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <span className="hidden rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600 sm:inline-block">
-            Milestone 1 Active
-          </span>
-          <div className="flex rounded-md border border-slate-200 bg-slate-100 p-0.5 text-xs font-medium">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
+            <span className="h-2 w-2 rounded-full bg-red-600 animate-pulse" />
+            <span>{conflicts.length} Repeat-Dig Conflicts</span>
+          </div>
+          <div className="hidden rounded-md border border-slate-200 bg-slate-100 p-0.5 text-xs font-medium sm:flex">
             <span className="rounded bg-white px-2.5 py-1 text-slate-900 shadow-xs">
               Official View
             </span>
@@ -43,92 +101,214 @@ export default function Home() {
       </header>
 
       {/* 3. Main Persistent Responsive Workspace */}
-      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
-        {/* Left Sidebar: Project Explorer Placeholder */}
+      <div className="flex flex-1 flex-col overflow-hidden lg:flex-row">
+        {/* Left Sidebar: Project & Conflict Explorer */}
         <aside
           role="region"
-          aria-label="Project Explorer"
-          className="w-full border-b border-civic-border bg-white p-4 lg:w-96 lg:border-b-0 lg:border-r lg:overflow-y-auto"
+          aria-label="Project and Conflict Explorer"
+          className="flex w-full flex-col border-b border-civic-border bg-white lg:w-96 lg:border-b-0 lg:border-r"
         >
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-              Project Explorer
-            </h2>
-            <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-civic-blue">
-              Standby
-            </span>
+          {/* Tabs: Projects vs Conflicts */}
+          <div className="flex border-b border-slate-200 bg-slate-50 text-xs font-semibold">
+            <button
+              onClick={() => setActiveTab('PROJECTS')}
+              className={`flex-1 py-2.5 text-center transition-colors ${
+                activeTab === 'PROJECTS'
+                  ? 'border-b-2 border-civic-blue bg-white text-civic-blue'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Public Projects ({projects.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('CONFLICTS')}
+              className={`flex-1 py-2.5 text-center transition-colors ${
+                activeTab === 'CONFLICTS'
+                  ? 'border-b-2 border-red-600 bg-white text-red-700'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Conflict Alerts ({conflicts.length})
+            </button>
           </div>
 
-          <div className="mt-4 space-y-3">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 text-xs text-slate-600">
-              <p className="font-semibold text-slate-800">Repeat-Dig Conflict Engine</p>
-              <p className="mt-1 leading-relaxed text-slate-500">
-                Awaiting Milestone 2 domain dataset and deterministic evaluation logic.
-              </p>
-            </div>
+          {/* List Content */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+            {activeTab === 'PROJECTS' && (
+              <>
+                <p className="text-[11px] font-medium text-slate-500 px-1">
+                  Click a project to center on the map and view details:
+                </p>
+                {projects.map((proj) => {
+                  const isSelected = selectedProjectId === proj.id;
+                  const isInConflict = conflicts.some(
+                    (c) => c.projectAId === proj.id || c.projectBId === proj.id
+                  );
+                  const road = roads.find((r) => r.id === proj.roadId);
 
-            <div className="rounded-lg border border-slate-200 p-3.5 text-xs">
+                  return (
+                    <div
+                      key={proj.id}
+                      onClick={() => handleSelectProject(proj.id)}
+                      className={`cursor-pointer rounded-lg border p-3 text-xs transition-all ${
+                        isSelected
+                          ? 'border-civic-blue bg-blue-50/60 shadow-sm'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className="font-bold text-slate-800 leading-snug">{proj.title}</span>
+                        {isInConflict && (
+                          <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">
+                            ⚠️ Conflict
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">
+                          {proj.agency}
+                        </span>
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600">
+                          {proj.category}
+                        </span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-slate-500">{proj.status}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500 truncate">
+                        Road: {road ? road.name : proj.roadId}
+                      </div>
+                      <div className="mt-0.5 font-mono text-[10px] text-slate-400">
+                        {proj.startDate} to {proj.endDate}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+
+            {activeTab === 'CONFLICTS' && (
+              <>
+                <p className="text-[11px] font-medium text-slate-500 px-1">
+                  Engine-detected repeat-dig coordination risks:
+                </p>
+                {conflicts.map((conflict) => {
+                  const isSelected = selectedConflictId === conflict.id;
+                  const road = roads.find((r) => r.id === conflict.roadId);
+
+                  return (
+                    <div
+                      key={conflict.id}
+                      onClick={() => handleSelectConflict(conflict.id)}
+                      className={`cursor-pointer rounded-lg border p-3 text-xs transition-all ${
+                        isSelected
+                          ? 'border-red-600 bg-red-50/70 shadow-sm'
+                          : 'border-red-200 bg-white hover:border-red-300 hover:bg-red-50/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="rounded bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-800">
+                          {conflict.ruleType === 'CONCURRENT_WORK_COLLISION'
+                            ? 'CRITICAL · Direct Collision'
+                            : 'HIGH · Recent Resurfacing'}
+                        </span>
+                        <span className="text-[11px] font-bold text-red-700">
+                          {conflict.temporalDetails.dateOverlap
+                            ? `${conflict.temporalDetails.dateOverlap.overlapDays}d overlap`
+                            : `${conflict.temporalDetails.resurfacingInterval?.elapsedDays}d post-paving`}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 font-semibold text-slate-800">
+                        {road ? road.name : conflict.roadId}
+                      </p>
+
+                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-600">
+                        {conflict.explanation}
+                      </p>
+
+                      <div className="mt-2 rounded bg-white/90 p-1.5 text-[10px] text-slate-500 border border-red-100">
+                        Projects: <span className="font-mono font-medium">{conflict.projectAId}</span> &amp; <span className="font-mono font-medium">{conflict.projectBId}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+
+          {/* Contextual Detail Card at bottom of sidebar if item is selected */}
+          {(selectedProject || selectedConflict) && (
+            <div className="border-t border-slate-200 bg-slate-50 p-3 max-h-56 overflow-y-auto">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-800">Agencies Supported</span>
-                <span className="text-[11px] text-slate-400">5 Entities</span>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  {selectedProject ? 'Project Inspector' : 'Conflict Advisory Details'}
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedProjectId(null);
+                    setSelectedConflictId(null);
+                  }}
+                  className="text-[11px] font-semibold text-slate-400 hover:text-slate-700"
+                >
+                  ✕ Close
+                </button>
               </div>
-              <div className="mt-2.5 flex flex-wrap gap-1.5">
-                <span className="rounded bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-agency-gcc">
-                  GCC (Roads)
-                </span>
-                <span className="rounded bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-agency-cmwssb">
-                  CMWSSB (Water)
-                </span>
-                <span className="rounded bg-orange-50 px-2 py-0.5 text-[11px] font-medium text-agency-tangedco">
-                  TANGEDCO (Power)
-                </span>
-                <span className="rounded bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-agency-cmrl">
-                  CMRL (Metro)
-                </span>
-                <span className="rounded bg-teal-50 px-2 py-0.5 text-[11px] font-medium text-agency-telecom">
-                  Telecom
-                </span>
-              </div>
+
+              {selectedProject && (
+                <div className="mt-2 space-y-1.5 text-xs">
+                  <p className="font-bold text-slate-900">{selectedProject.title}</p>
+                  <p className="text-[11px] text-slate-600">{selectedProject.description}</p>
+                  <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] text-slate-600">
+                    <div>
+                      <span className="text-slate-400">Contractor: </span>
+                      <span className="font-medium text-slate-800">{selectedProject.contractor}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Status: </span>
+                      <span className="font-medium text-slate-800">{selectedProject.status}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Subsegment: </span>
+                      <span className="font-mono">{(selectedProject.segmentStartPct * 100).toFixed(0)}%–{(selectedProject.segmentEndPct * 100).toFixed(0)}%</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Timeline: </span>
+                      <span className="font-mono">{selectedProject.startDate}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedConflict && (
+                <div className="mt-2 space-y-1.5 text-xs">
+                  <p className="font-bold text-red-800">{selectedConflict.ruleType}</p>
+                  <p className="text-[11px] text-slate-700 leading-relaxed">{selectedConflict.explanation}</p>
+                  <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-[11px] text-emerald-900">
+                    <p className="font-semibold text-emerald-800">Recommended Coordination Action:</p>
+                    <p className="mt-0.5">{selectedConflict.recommendedAction}</p>
+                  </div>
+                  {selectedConflict.limitations && (
+                    <p className="text-[10px] text-slate-400 italic">
+                      Limitation: {selectedConflict.limitations[0]}
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </aside>
 
-        {/* Right Area: Interactive GIS Map Placeholder */}
-        <main
-          role="main"
-          className="relative flex flex-1 flex-col items-center justify-center bg-slate-100 p-6"
-        >
-          <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-6 text-center shadow-xs">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-civic-blue">
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                />
-              </svg>
-            </div>
-            <h3 className="mt-3 text-sm font-bold text-civic-navy">
-              Interactive GIS Canvas
-            </h3>
-            <p className="mt-1 text-xs text-slate-500">
-              Chennai–Kancheepuram corridor coordinate target: <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[11px] text-slate-700">[13.0827, 80.2707]</code>.
-            </p>
-            <div className="mt-4 rounded-md border border-dashed border-slate-300 bg-slate-50 p-3 text-[11px] text-slate-500">
-              Leaflet dynamic map rendering will be integrated in Milestone 3 with OpenStreetMap / CARTO Positron tile layers and agency polylines.
-            </div>
-          </div>
-
-          {/* Map Attribution Bar */}
-          <footer className="absolute bottom-2 right-3 text-[10px] text-slate-400">
-            Map data © <span className="underline">OpenStreetMap</span> contributors, © <span className="underline">CARTO</span>
-          </footer>
+        {/* Right Area: Interactive GIS Leaflet Canvas */}
+        <main role="main" className="relative flex flex-1 flex-col overflow-hidden bg-slate-100">
+          <DigOnceMap
+            roads={roads}
+            projects={projects}
+            conflicts={conflicts}
+            selectedProjectId={selectedProjectId}
+            selectedConflictId={selectedConflictId}
+            onSelectProject={handleSelectProject}
+            onSelectConflict={handleSelectConflict}
+          />
         </main>
       </div>
     </div>
