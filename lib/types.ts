@@ -74,6 +74,14 @@ export interface ResurfacingInterval {
   heuristicThresholdDays: number; // Configurable window (default: 180)
 }
 
+export type CoordinationStatus = 'UNREVIEWED' | 'REVIEWED' | 'COORDINATION_PROPOSED';
+
+export interface ConflictReviewState {
+  status: CoordinationStatus;
+  reviewedAt?: string;
+  reviewerNotes?: string;
+}
+
 export interface ConflictFinding {
   id: string;                         // Stable, deterministic finding ID: e.g. "CNF-CONCURRENT-PRJ-01-PRJ-02"
   ruleType: ConflictRuleType;
@@ -92,6 +100,7 @@ export interface ConflictFinding {
   explanation: string;                // Clear, human-readable civic operational explanation
   recommendedAction: string;          // Actionable review advice (e.g. joint trenching, pre-paving sync)
   limitations?: string[];             // Explicit operational or data limitations
+  coordinationStatus?: CoordinationStatus;
 }
 
 export interface DataValidationError {

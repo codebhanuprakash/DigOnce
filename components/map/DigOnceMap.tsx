@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { RoadSegment, PublicWorkProject, ConflictFinding, AgencyType } from '@/lib/types';
+import { interpolateSubPolyline } from '@/lib/geoUtils';
 
 interface DigOnceMapProps {
   roads: RoadSegment[];
@@ -61,10 +62,9 @@ export default function DigOnceMap({
       minZoom: 9,
       maxZoom: 18,
       zoomControl: true,
-      attributionControl: false, // We render a customized accessible attribution
+      attributionControl: false,
     });
 
-    // High performance, free public tile layer (CartoDB Positron with OSM fallback)
     const tileLayer = L.tileLayer(
       'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
       {
@@ -90,7 +90,7 @@ export default function DigOnceMap({
     };
   }, []);
 
-  // 2. Render Polylines, Markers, and Conflict Highlights whenever data or selection changes
+  // 2. Render Polylines, Markers, and Conflict Subsegments whenever data or selection changes
   useEffect(() => {
     const map = mapInstanceRef.current;
     const group = layersGroupRef.current;
@@ -98,18 +98,16 @@ export default function DigOnceMap({
 
     group.clearLayers();
 
-    // Set of project IDs involved in active conflicts
+    // Map of project IDs involved in conflicts
     const conflictProjectIds = new Set<string>();
-    const conflictingRoadIds = new Set<string>();
     for (const c of conflicts) {
       conflictProjectIds.add(c.projectAId);
       conflictProjectIds.add(c.projectBId);
-      conflictingRoadIds.add(c.roadId);
     }
 
     const boundsLatLngs: L.LatLngTuple[] = [];
 
-    // A. Render Road Segments
+    // A. Render Road Segments (Neutral base line)
     for (const road of roads) {
       const validPoints: L.LatLngTuple[] = road.coordinates
         .filter((c) => isValidCoord(c.lat, c.lng))
@@ -118,12 +116,10 @@ export default function DigOnceMap({
       if (validPoints.length >= 2) {
         boundsLatLngs.push(...validPoints);
 
-        const isRoadInConflict = conflictingRoadIds.has(road.id);
         const polyline = L.polyline(validPoints, {
-          color: isRoadInConflict ? '#DC2626' : '#64748B',
-          weight: isRoadInConflict ? 5 : 4,
-          opacity: isRoadInConflict ? 0.9 : 0.65,
-          dashArray: isRoadInConflict ? '8, 6' : undefined,
+          color: '#64748B',
+          weight: 4,
+          opacity: 0.5,
         });
 
         polyline.bindTooltip(
@@ -135,7 +131,48 @@ export default function DigOnceMap({
       }
     }
 
-    // B. Render Projects
+    // B. Render True Overlapping Conflict Subsegments
+    for (const conflict of conflicts) {
+      const road = roads.find((r) => r.id === conflict.roadId);
+      const isConflictSelected = selectedConflictId === conflict.id;
+
+      if (road && road.coordinates.length >= 2) {
+        const subsegmentCoords = interpolateSubPolyline(
+          road.coordinates,
+          conflict.subsegmentOverlap.startPct,
+          conflict.subsegmentOverlap.endPct
+        );
+
+        const conflictLinePoints: L.LatLngTuple[] = subsegmentCoords.map((c) => [c.lat, c.lng]);
+
+        if (conflictLinePoints.length >= 2) {
+          const conflictPoly = L.polyline(conflictLinePoints, {
+            color: '#DC2626',
+            weight: isConflictSelected ? 9 : 6,
+            opacity: 0.95,
+            dashArray: '8, 6',
+          });
+
+          conflictPoly.on('click', () => {
+            onSelectConflict(conflict.id);
+          });
+
+          conflictPoly.bindTooltip(
+            `<div style="font-size:11px;">
+              <strong style="color:#DC2626;">⚠️ Repeat-Dig Conflict Area</strong><br/>
+              <strong>${road.name}</strong><br/>
+              Overlap: ${(conflict.subsegmentOverlap.startPct * 100).toFixed(0)}%–${(conflict.subsegmentOverlap.endPct * 100).toFixed(0)}% chainage<br/>
+              Status: ${conflict.coordinationStatus || 'UNREVIEWED'}
+            </div>`,
+            { sticky: true }
+          );
+
+          conflictPoly.addTo(group);
+        }
+      }
+    }
+
+    // C. Render Projects (Specific project polyline and marker pin)
     for (const project of projects) {
       const hasConflict = conflictProjectIds.has(project.id);
       const isSelected = selectedProjectId === project.id;
@@ -150,10 +187,9 @@ export default function DigOnceMap({
         boundsLatLngs.push(...projPoints);
 
         const projPolyline = L.polyline(projPoints, {
-          color: isSelected ? '#1D4ED8' : hasConflict ? '#DC2626' : agencyColor,
-          weight: isSelected ? 8 : hasConflict ? 6 : 5,
-          opacity: 0.9,
-          dashArray: hasConflict ? '6, 4' : undefined,
+          color: isSelected ? '#1D4ED8' : agencyColor,
+          weight: isSelected ? 8 : 4,
+          opacity: isSelected ? 1.0 : 0.8,
         });
 
         projPolyline.on('click', () => {
@@ -163,7 +199,7 @@ export default function DigOnceMap({
         projPolyline.addTo(group);
       }
 
-      // 2) Render Project Marker Pin at the first valid point
+      // 2) Render Project Marker Pin at the first valid coordinate
       if (projPoints.length > 0) {
         const pinPos = projPoints[0];
         const pinHtml = `
@@ -194,14 +230,14 @@ export default function DigOnceMap({
       }
     }
 
-    // C. Fit Bounds to Chennai–Kancheepuram points on initial load if within reasonable range
+    // D. Fit bounds on initial load if no selection is active
     if (boundsLatLngs.length > 0 && !selectedProjectId && !selectedConflictId) {
       const bounds = L.latLngBounds(boundsLatLngs);
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
     }
-  }, [roads, projects, conflicts, selectedProjectId, selectedConflictId, onSelectProject]);
+  }, [roads, projects, conflicts, selectedProjectId, selectedConflictId, onSelectProject, onSelectConflict]);
 
-  // 3. Pan and focus when a project or conflict is selected
+  // 3. Pan and focus smoothly when a project or conflict is selected
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -220,12 +256,14 @@ export default function DigOnceMap({
       const conflict = conflicts.find((c) => c.id === selectedConflictId);
       if (conflict) {
         const road = roads.find((r) => r.id === conflict.roadId);
-        if (road && road.coordinates.length > 0) {
-          const pts: L.LatLngTuple[] = road.coordinates
-            .filter((c) => isValidCoord(c.lat, c.lng))
-            .map((c) => [c.lat, c.lng]);
-          if (pts.length > 0) {
-            map.flyTo(pts[0], 14, { duration: 0.8 });
+        if (road && road.coordinates.length >= 2) {
+          const subPts = interpolateSubPolyline(
+            road.coordinates,
+            conflict.subsegmentOverlap.startPct,
+            conflict.subsegmentOverlap.endPct
+          );
+          if (subPts.length > 0) {
+            map.flyTo([subPts[0].lat, subPts[0].lng], 14, { duration: 0.8 });
           }
         }
       }
@@ -240,9 +278,9 @@ export default function DigOnceMap({
       {/* Tile Error Fallback Notice */}
       {tileError && (
         <div className="absolute top-3 left-3 z-30 max-w-sm rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 shadow-md">
-          <p className="font-semibold text-amber-800">Map Tile Provider Warning</p>
+          <p className="font-semibold text-amber-800">Map Tile Provider Notice</p>
           <p className="mt-1">
-            Basemap tiles are experiencing latency. Vector road geometries and project coordinates remain operational. All project data is accessible in the sidebar.
+            Basemap tile server experiencing latency. Vector road geometries and project markers remain operational. All project data is accessible in the sidebar.
           </p>
         </div>
       )}
@@ -273,7 +311,7 @@ export default function DigOnceMap({
           </div>
           <div className="pt-1 border-t border-slate-200 flex items-center gap-2">
             <span className="h-2.5 w-5 rounded-sm border border-dashed border-red-600 bg-red-100 inline-block" />
-            <span className="font-semibold text-red-700">⚠️ Active Conflict / Repeat Dig</span>
+            <span className="font-semibold text-red-700">⚠️ True Overlapping Subsegment</span>
           </div>
         </div>
       </div>
