@@ -113,3 +113,5 @@ npm run start
 ## 8. Verified Interface Screenshot
 
 ![DigOnce Interface](public/digonce-verified-interface.png)
+## 9. Demo video link 
+[https://drive.google.com/file/d/1prHL9-JmtYaK7eMyYVE1kXOexFFnFwvY/view?usp=drivesdk]
