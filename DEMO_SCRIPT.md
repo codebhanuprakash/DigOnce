@@ -15,12 +15,12 @@
 ---
 
 ### Segment 2: Interactive GIS Map & Project Discovery (0:35 - 1:15)
-- **Visual:** Hover over road polylines on Anna Salai and Arcot Road. Point out the agency color coding in the bottom-left legend (Indigo for GCC, Sky for CMWSSB, Orange for TANGEDCO).
+- **Visual:** Hover over real road polylines on Anna Salai, Arcot Road, Rajiv Gandhi Salai (OMR), and Kancheepuram Railway Road. Show the top-left GIS Layers control toggling the Road Network, Public Projects, and Conflicts. Point out the bottom-left metric scale bar and legend.
 - **Action:** Type `"Anna Salai"` in the Project Explorer search bar. Show real-time filtering. Click on `PRJ-2026-GCC-041 (Anna Salai Bitumen Milling & Resurfacing)`.
 - **Narrator / Caption:**
-  > "DigOnce renders road network polylines and planned work orders on a lightweight, high-performance GIS canvas with complete OpenStreetMap attribution. 
+  > "DigOnce renders verified OpenStreetMap road centerlines and planned work orders on a lightweight, high-performance GIS canvas with complete ODbL attribution.
   > 
-  > In the Project Explorer, officers can instantly filter by civic department, work category, or street name. Selecting a project card animates the map directly to its subsegment and displays complete contractor and schedule metadata."
+  > In the Project Explorer, officers can instantly filter by civic department, work category, or street name. Selecting a project card animates the map directly to its subsegment and displays complete contractor, chainage, and schedule metadata."
 
 ---
 
@@ -32,10 +32,10 @@
   > 
   > Unlike naive coordinate-proximity guesses, our **Repeat-Dig Conflict Engine** is 100% deterministic:
   > First, it checks canonical road segment identity.
-  > Second, it calculates the physical subsegment chainage overlap — here, 40% to 70% along Anna Salai.
+  > Second, it calculates the physical subsegment chainage overlap — here, exactly 40% to 70% along Anna Salai.
   > Third, it computes the inclusive calendar collision: November 10 to November 20.
   > 
-  > Crucially, the map doesn't just color the whole street red — using piecewise linear interpolation, it highlights the exact physical overlapping trench section."
+  > Crucially, the map doesn't just color the whole street red — using Haversine geodesic interpolation, it highlights the exact physical overlapping trench section tracing real street bends."
 
 ---
 
@@ -50,6 +50,6 @@
 ---
 
 ### Segment 5: Verification & Conclusion (2:35 - 2:45)
-- **Visual:** Pan back to the full corridor view showing both Chennai and Kancheepuram project sites. Show the clear synthetic demo disclosure banner.
+- **Visual:** Pan back to the full corridor view using the 'Reset Extent' button, showing both Chennai and Kancheepuram project sites. Show the clear synthetic demo disclosure banner.
 - **Narrator / Caption:**
-  > "With 23 automated unit tests, full Playwright browser verification, and zero proprietary API costs, DigOnce transforms uncoordinated road cuts into synchronized civic infrastructure. Thank you."
+  > "With 44 automated unit tests, 4 Playwright browser test suites, and zero proprietary tile API costs, DigOnce transforms uncoordinated road cuts into synchronized civic infrastructure. Thank you."
