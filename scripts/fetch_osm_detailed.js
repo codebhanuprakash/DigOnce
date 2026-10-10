@@ -11,7 +11,7 @@ out body geom;
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'DigOnce-Civic-App/1.0 (contact@digonce.civic.in)'
+      'User-Agent': 'DigOnce-Civic-App/1.0 (https://github.com/digonce-project/digonce)'
     },
     body: 'data=' + encodeURIComponent(query.trim())
   });
