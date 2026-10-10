@@ -1,4 +1,4 @@
-# DigOnce (சென்னை–காஞ்சிபுரம்) — Civic Works Coordination Portal
+# DigOnce — Civic Works Coordination Portal
 
 > **Civic Infrastructure Coordination & Repeat-Dig Conflict Detection Platform for Chennai–Kancheepuram, Tamil Nadu, India.**
 
